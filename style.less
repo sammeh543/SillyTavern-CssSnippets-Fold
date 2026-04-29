@@ -343,5 +343,114 @@ html > body.csss--body {
 		filter: invert(0);
 	}
 }
+/* ============================================================
+   FOLDER STYLES — append to style.less (above the final @import)
+   ============================================================ */
+
+html > body.csss--body {
+
+    /* ── folder <li> container ───────────────────────────────── */
+    #csss--list > .csss--folder {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        border: 1px solid var(--SmartThemeBorderColor);
+        border-radius: 6px;
+        overflow: hidden;
+        background-color: color-mix(in srgb, var(--greyCAIbg) 85%, transparent);
+
+        /* header row */
+        > .csss--folder-header {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 0.4em;
+            padding: 0.3em 0.5em;
+            background-color: color-mix(in srgb, var(--SmartThemeBlurTintColor) 60%, transparent);
+            cursor: default;
+            user-select: none;
+            transition: background-color 150ms;
+
+            /* drop-target highlight */
+            &.csss--drop-target {
+                background-color: color-mix(in srgb, var(--SmartThemeQuoteColor) 30%, transparent);
+                outline: 2px dashed var(--SmartThemeQuoteColor);
+                outline-offset: -2px;
+            }
+
+            > .csss--folder-drag {
+                flex: 0 0 auto;
+                cursor: grab;
+                padding: 0.4em 0.6em;
+                opacity: 0.5;
+                &:active { cursor: grabbing; }
+            }
+
+            > .csss--folder-collapse {
+                flex: 0 0 auto;
+            }
+
+            > .csss--folder-icon {
+                flex: 0 0 auto;
+                opacity: 0.7;
+            }
+
+            > .csss--folder-name {
+                flex: 1 1 auto;
+                font-weight: bold;
+                background: transparent;
+                border: none;
+                border-bottom: 1px solid transparent;
+                border-radius: 0;
+                padding: 0.1em 0.3em;
+                &:focus {
+                    border-bottom-color: var(--SmartThemeQuoteColor);
+                    outline: none;
+                }
+            }
+
+            > .csss--folder-remove {
+                flex: 0 0 auto;
+                opacity: 0;
+                transition: opacity 150ms;
+            }
+            &:hover > .csss--folder-remove {
+                opacity: 1;
+            }
+        }
+
+        /* inner snippet list */
+        > .csss--folder-snippets {
+            list-style: none;
+            margin: 0;
+            padding: 0.25em 0.5em 0.5em 1.5em;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5em;
+            min-height: 2em; /* drop zone always has height */
+            border-top: 1px solid color-mix(in srgb, var(--SmartThemeBorderColor) 40%, transparent);
+            transition: padding 150ms;
+        }
+
+        /* collapsed state — hide sub-list */
+        &.csss--folder-isCollapsed {
+            > .csss--folder-snippets {
+                display: none;
+            }
+        }
+    }
+
+    /* snippet being dragged */
+    .csss--snippet.csss--dragging {
+        opacity: 0.4;
+    }
+
+    /* add-folder button in footer */
+    .csss--listActions {
+        gap: 0.5em;
+    }
+}
+
+/* compiled CSS version — paste into style.css if not using LESS */
 
 @import "./hljs.css";

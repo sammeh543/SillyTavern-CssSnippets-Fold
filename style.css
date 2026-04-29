@@ -310,3 +310,99 @@ html > body.csss--body .csss--contentSyntaxInner {
     filter: invert(0);
   }
 }
+/* ============================================================
+   FOLDER STYLES — append to style.less (above the final @import)
+   ============================================================ */
+html > body.csss--body {
+  /* ── folder <li> container ───────────────────────────────── */
+  /* snippet being dragged */
+  /* add-folder button in footer */
+}
+html > body.csss--body #csss--list > .csss--folder {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--SmartThemeBorderColor);
+  border-radius: 6px;
+  overflow: hidden;
+  background-color: color-mix(in srgb, var(--greyCAIbg) 85%, transparent);
+  /* header row */
+  /* inner snippet list */
+  /* collapsed state — hide sub-list */
+}
+html > body.csss--body #csss--list > .csss--folder > .csss--folder-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.3em 0.5em;
+  background-color: color-mix(in srgb, var(--SmartThemeBlurTintColor) 60%, transparent);
+  cursor: default;
+  user-select: none;
+  transition: background-color 150ms;
+  /* drop-target highlight */
+}
+html > body.csss--body #csss--list > .csss--folder > .csss--folder-header.csss--drop-target {
+  background-color: color-mix(in srgb, var(--SmartThemeQuoteColor) 30%, transparent);
+  outline: 2px dashed var(--SmartThemeQuoteColor);
+  outline-offset: -2px;
+}
+html > body.csss--body #csss--list > .csss--folder > .csss--folder-header > .csss--folder-drag {
+  flex: 0 0 auto;
+  cursor: grab;
+  padding: 0.4em 0.6em;
+  opacity: 0.5;
+}
+html > body.csss--body #csss--list > .csss--folder > .csss--folder-header > .csss--folder-drag:active {
+  cursor: grabbing;
+}
+html > body.csss--body #csss--list > .csss--folder > .csss--folder-header > .csss--folder-collapse {
+  flex: 0 0 auto;
+}
+html > body.csss--body #csss--list > .csss--folder > .csss--folder-header > .csss--folder-icon {
+  flex: 0 0 auto;
+  opacity: 0.7;
+}
+html > body.csss--body #csss--list > .csss--folder > .csss--folder-header > .csss--folder-name {
+  flex: 1 1 auto;
+  font-weight: bold;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  padding: 0.1em 0.3em;
+}
+html > body.csss--body #csss--list > .csss--folder > .csss--folder-header > .csss--folder-name:focus {
+  border-bottom-color: var(--SmartThemeQuoteColor);
+  outline: none;
+}
+html > body.csss--body #csss--list > .csss--folder > .csss--folder-header > .csss--folder-remove {
+  flex: 0 0 auto;
+  opacity: 0;
+  transition: opacity 150ms;
+}
+html > body.csss--body #csss--list > .csss--folder > .csss--folder-header:hover > .csss--folder-remove {
+  opacity: 1;
+}
+html > body.csss--body #csss--list > .csss--folder > .csss--folder-snippets {
+  list-style: none;
+  margin: 0;
+  padding: 0.25em 0.5em 0.5em 1.5em;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+  min-height: 2em;
+  /* drop zone always has height */
+  border-top: 1px solid color-mix(in srgb, var(--SmartThemeBorderColor) 40%, transparent);
+  transition: padding 150ms;
+}
+html > body.csss--body #csss--list > .csss--folder.csss--folder-isCollapsed > .csss--folder-snippets {
+  display: none;
+}
+html > body.csss--body .csss--snippet.csss--dragging {
+  opacity: 0.4;
+}
+html > body.csss--body .csss--listActions {
+  gap: 0.5em;
+}
+/* compiled CSS version — paste into style.css if not using LESS */

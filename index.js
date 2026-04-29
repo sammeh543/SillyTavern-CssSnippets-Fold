@@ -11,6 +11,7 @@ import { debounce, delay, getSortableDelay, isTrueBoolean } from '../../../utils
 import './lib/prism-code-editor/prism/languages/css.js';
 import { highlightText } from './lib/prism-code-editor/prism/index.js';
 
+import { Folder } from './src/Folder.js';
 import { Settings } from './src/Settings.js';
 import { Snippet } from './src/Snippet.js';
 
@@ -19,7 +20,6 @@ const NAME = new URL(import.meta.url).pathname.split('/').at(-2);
 const watchCss = async()=>{
     try {
         const FilesPluginApi = (await import('../SillyTavern-FilesPluginApi/api.js')).FilesPluginApi;
-        // watch CSS for changes
         const style = document.createElement('style');
         document.body.append(style);
         const path = [
@@ -427,6 +427,8 @@ let settings;
 let manager;
 /**@type {HTMLElement} */
 let snippetTemplate;
+/**@type {HTMLElement} */
+let folderTemplate;
 /**@type {HTMLStyleElement} */
 let style;
 /**@type {HTMLStyleElement} */
@@ -513,7 +515,63 @@ const updateExportSelection = ()=>{
 };
 
 /**
- *
+ * Get the folder a snippet belongs to, if any.
+ * @param {Snippet} snippet
+ * @returns {Folder|null}
+ */
+const getFolderForSnippet = (snippet)=>{
+    return settings.folderList.find(f=>f.snippetIds.includes(snippet.id)) ?? null;
+};
+
+/**
+ * Remove a snippet from any folder it belongs to (without deleting the snippet).
+ * @param {Snippet} snippet
+ */
+const removeSnippetFromFolder = (snippet)=>{
+    for (const folder of settings.folderList) {
+        const idx = folder.snippetIds.indexOf(snippet.id);
+        if (idx !== -1) {
+            folder.snippetIds.splice(idx, 1);
+        }
+    }
+};
+
+/**
+ * @param {Snippet} snippet
+ * @param {HTMLElement} ta
+ */
+const expand = (snippet, ta) => {
+    /**@type {import('./lib/prism-code-editor/types.js').PrismEditor} */
+    let editor;
+    const blocker = document.createElement('div'); {
+        blocker.classList.add('csss--blocker');
+        const body = document.createElement('div'); {
+            body.classList.add('csss--body');
+            body.classList.add('csss--expand');
+            const content = document.createElement('div'); {
+                content.classList.add('csss--editor');
+                editor = manager.window.createEditor(content, snippet);
+                body.append(content);
+            }
+            const ok = document.createElement('button'); {
+                ok.classList.add('csss--ok');
+                ok.textContent = 'OK';
+                ok.addEventListener('click', ()=>{
+                    snippet.content = editor.value;
+                    snippet.save();
+                    ta.innerHTML = highlightText(snippet.content, 'css');
+                    editor.remove();
+                    blocker.remove();
+                });
+                body.append(ok);
+            }
+            blocker.append(body);
+        }
+        manager.document.body.append(blocker);
+    }
+};
+
+/**
  * @param {Snippet} snippet
  */
 const showThemes = (snippet) => {
@@ -537,7 +595,6 @@ const showThemes = (snippet) => {
                     contentContainer.append(h4);
                 }
                 const content = document.createElement('div'); {
-                    // content.classList.add('csss--themesContent');
                     const themes = [...document.querySelectorAll('#themes > option')].map(it=>it.textContent);
                     for (const theme of themes) {
                         const item = document.createElement('label'); {
@@ -623,7 +680,6 @@ const showThemes = (snippet) => {
                     contentContainer.append(h4Chats);
                 }
                 const contentChats = document.createElement('div'); {
-                    // contentChats.classList.add('csss--themesContent');
                     for (const char of snippet.charList) {
                         const item = document.createElement('label'); {
                             item.classList.add('csss--themesItem');
@@ -709,43 +765,10 @@ const showThemes = (snippet) => {
         manager.document.body.append(blocker);
     }
 };
-/**
- *
- * @param {Snippet} snippet
- * @param {HTMLElement} ta
- */
-const expand = (snippet, ta) => {
-    /**@type {import('./lib/prism-code-editor/types.js').PrismEditor} */
-    let editor;
-    const blocker = document.createElement('div'); {
-        blocker.classList.add('csss--blocker');
-        const body = document.createElement('div'); {
-            body.classList.add('csss--body');
-            body.classList.add('csss--expand');
-            const content = document.createElement('div'); {
-                content.classList.add('csss--editor');
-                editor = manager.window.createEditor(content, snippet);
-                body.append(content);
-            }
-            const ok = document.createElement('button'); {
-                ok.classList.add('csss--ok');
-                ok.textContent = 'OK';
-                ok.addEventListener('click', ()=>{
-                    snippet.content = editor.value;
-                    snippet.save();
-                    ta.innerHTML = highlightText(snippet.content, 'css');
-                    editor.remove();
-                    blocker.remove();
-                });
-                body.append(ok);
-            }
-            blocker.append(body);
-        }
-        manager.document.body.append(blocker);
-    }
-};
+
 /**
  * @param {Snippet} snippet
+ * @returns {HTMLElement}
  */
 const makeSnippetDom = (snippet)=>{
     let noSave = true;
@@ -906,8 +929,162 @@ const makeSnippetDom = (snippet)=>{
     noSave = false;
     return li;
 };
+
 /**
- *
+ * Build a folder <li> and its inner sortable snippet list.
+ * @param {Folder} folder
+ * @returns {HTMLElement}
+ */
+const makeFolderDom = (folder)=>{
+    const li = /**@type {HTMLElement}*/(folderTemplate.cloneNode(true));
+    folder.li = li;
+    li.setAttribute('data-csss-folder', folder.id);
+
+    // ── header elements ──────────────────────────────────────────────────────
+    const collapseBtn = li.querySelector('.csss--folder-collapse');
+    const nameInput   = /**@type {HTMLInputElement}*/(li.querySelector('.csss--folder-name'));
+    const removeBtn   = li.querySelector('.csss--folder-remove');
+    const subList     = /**@type {HTMLElement}*/(li.querySelector('.csss--folder-snippets'));
+
+    // collapse toggle
+    const applyCollapse = ()=>{
+        if (folder.isCollapsed) {
+            li.classList.add('csss--folder-isCollapsed');
+            collapseBtn.classList.replace('fa-angle-up', 'fa-angle-down');
+        } else {
+            li.classList.remove('csss--folder-isCollapsed');
+            collapseBtn.classList.replace('fa-angle-down', 'fa-angle-up');
+        }
+    };
+    applyCollapse();
+    collapseBtn.addEventListener('click', ()=>{
+        folder.isCollapsed = !folder.isCollapsed;
+        applyCollapse();
+        settings.save();
+    });
+
+    // name
+    nameInput.value = folder.name;
+    nameInput.addEventListener('paste', (evt)=>evt.stopPropagation());
+    nameInput.addEventListener('input', ()=>{
+        folder.name = nameInput.value.trim();
+        settings.save();
+    });
+
+    // delete folder (snippets stay at root)
+    removeBtn.addEventListener('click', ()=>{
+        if (!manager.window.confirm(`Delete folder "${folder.name}"?\n\nSnippets inside will NOT be deleted — they'll return to the root list.`)) return;
+        // move snippets back to root
+        for (const id of [...folder.snippetIds]) {
+            const snippet = settings.snippetList.find(s=>s.id == id);
+            if (!snippet) continue;
+            const sdm = snippetDomMapper.find(m=>m.snippet == snippet);
+            if (sdm) list.append(sdm.li); // re-parent to root list
+        }
+        folder.snippetIds = [];
+        settings.folderList.splice(settings.folderList.indexOf(folder), 1);
+        li.remove();
+        settings.save();
+        rebuildRootSortable();
+    });
+
+    // ── drag-over highlight so snippets can be dropped onto the header ────────
+    const header = li.querySelector('.csss--folder-header');
+    header.addEventListener('dragover', (evt)=>{
+        evt.preventDefault();
+        header.classList.add('csss--drop-target');
+    });
+    header.addEventListener('dragleave', ()=>{
+        header.classList.remove('csss--drop-target');
+    });
+    header.addEventListener('drop', (evt)=>{
+        evt.preventDefault();
+        header.classList.remove('csss--drop-target');
+        const snippetId = evt.dataTransfer.getData('csss/snippet-id');
+        if (!snippetId) return;
+        const snippet = settings.snippetList.find(s=>s.id == snippetId);
+        if (!snippet) return;
+        // remove from old folder / root
+        removeSnippetFromFolder(snippet);
+        // add to this folder
+        if (!folder.snippetIds.includes(snippet.id)) {
+            folder.snippetIds.push(snippet.id);
+        }
+        // move DOM node into sub-list
+        const sdm = snippetDomMapper.find(m=>m.snippet == snippet);
+        if (sdm) subList.append(sdm.li);
+        settings.save();
+        // expand folder so user can see the snippet
+        if (folder.isCollapsed) {
+            folder.isCollapsed = false;
+            applyCollapse();
+        }
+    });
+
+    // ── inner sortable (snippets within this folder) ──────────────────────────
+    // We initialise jQuery UI sortable for subList after it's in the DOM.
+    // That happens in showCssManager after we append the folder li.
+    // Store a reference so we can init later.
+    li._subList = subList;
+
+    // populate with existing snippets
+    for (const id of folder.snippetIds) {
+        const snippet = settings.snippetList.find(s=>s.id == id);
+        if (!snippet) continue;
+        const sdm = snippetDomMapper.find(m=>m.snippet == snippet);
+        if (sdm) {
+            subList.append(sdm.li);
+        }
+    }
+
+    return li;
+};
+
+/**
+ * Re-initialise the root list's jQuery UI sortable.
+ * Called after folder creation/deletion so the root list stays correct.
+ */
+const rebuildRootSortable = ()=>{
+    if (!manager?.window?.$) return;
+    const $ = manager.window.$;
+    $(list).sortable('destroy').sortable({
+        delay: manager.window.sortableDelay,
+        items: '> .csss--snippet, > .csss--folder',  // only top-level items
+        stop: ()=>syncRootOrder(),
+    });
+};
+
+/**
+ * Persist the visual order of root-level items (folders + unfiled snippets).
+ */
+const syncRootOrder = ()=>{
+    // re-order folderList to match DOM order
+    const newFolderOrder = [];
+    const newSnippetOrder = [];
+    for (const child of list.children) {
+        if (child.classList.contains('csss--folder')) {
+            const folder = settings.folderList.find(f=>f.id == child.getAttribute('data-csss-folder'));
+            if (folder) newFolderOrder.push(folder);
+        } else if (child.classList.contains('csss--snippet')) {
+            const snippet = settings.snippetList.find(s=>s.li == child);
+            if (snippet) newSnippetOrder.push(snippet);
+        }
+    }
+    // rebuild snippetList: folder snippets first (in folder order), then root snippets in DOM order
+    const inFolders = settings.folderList.flatMap(f=>f.snippetIds.map(id=>settings.snippetList.find(s=>s.id==id)).filter(Boolean));
+    const notInFolders = newSnippetOrder;
+    settings.snippetList.sort((a,b)=>{
+        const ai = inFolders.includes(a) ? inFolders.indexOf(a) : inFolders.length + notInFolders.indexOf(a);
+        const bi = inFolders.includes(b) ? inFolders.indexOf(b) : inFolders.length + notInFolders.indexOf(b);
+        return ai - bi;
+    });
+    // reorder folderList
+    settings.folderList.length = 0;
+    settings.folderList.push(...newFolderOrder);
+    saveSettingsDebounced();
+};
+
+/**
  * @param {string} name
  * @param {string} content
  * @param {{disabled?:boolean, global?:boolean, theme?:boolean}} options
@@ -929,19 +1106,39 @@ const createSnippet = (name = null, content = null, { disabled, global, theme } 
         const li = makeSnippetDom(snippet);
         list.append(li);
         li.scrollIntoView();
+        // make the new li draggable
+        enableSnippetDrag(li, snippet);
+        rebuildRootSortable();
     }
     snippet.save();
 };
+
+/**
+ * Create a new folder and add it to the manager.
+ */
+const createFolder = ()=>{
+    const folder = new Folder();
+    settings.folderList.push(folder);
+    if (manager) {
+        const li = makeFolderDom(folder);
+        list.append(li);
+        li.scrollIntoView();
+        initFolderSubSortable(li._subList, folder);
+        rebuildRootSortable();
+    }
+    settings.save();
+};
+
 const deleteSnippetByName = (name)=>{
     const snippet = settings.snippetList.find(it=>it.name == name);
     deleteSnippet(snippet);
 };
 /**
- *
  * @param {Snippet} snippet
  */
 const deleteSnippet = (snippet)=>{
     snippet.isDeleted = true;
+    removeSnippetFromFolder(snippet);
     settings.snippetList.splice(settings.snippetList.indexOf(snippet), 1);
     const sdm = snippetDomMapper.find(it=>it.snippet == snippet);
     if (sdm) {
@@ -950,6 +1147,49 @@ const deleteSnippet = (snippet)=>{
     }
     snippet.save();
 };
+
+/**
+ * Enable HTML5 drag from a snippet li (used to drag INTO folder headers).
+ * @param {HTMLElement} li
+ * @param {Snippet} snippet
+ */
+const enableSnippetDrag = (li, snippet)=>{
+    const handle = li.querySelector('.drag-handle');
+    if (!handle) return;
+    // make the li draggable when the handle is used
+    handle.addEventListener('mousedown', ()=>{ li.draggable = true; });
+    handle.addEventListener('mouseup',   ()=>{ li.draggable = false; });
+    li.addEventListener('dragstart', (evt)=>{
+        evt.dataTransfer.setData('csss/snippet-id', snippet.id);
+        evt.dataTransfer.effectAllowed = 'move';
+        li.classList.add('csss--dragging');
+    });
+    li.addEventListener('dragend', ()=>{
+        li.draggable = false;
+        li.classList.remove('csss--dragging');
+    });
+};
+
+/**
+ * Init jQuery UI sortable on a folder's sub-list.
+ * @param {HTMLElement} subList
+ * @param {Folder} folder
+ */
+const initFolderSubSortable = (subList, folder)=>{
+    if (!manager?.window?.$) return;
+    const $ = manager.window.$;
+    $(subList).sortable({
+        delay: manager.window.sortableDelay,
+        stop: ()=>{
+            // persist order within folder
+            folder.snippetIds = Array.from(subList.children)
+                .map(el=>snippetDomMapper.find(m=>m.li == el)?.snippet?.id)
+                .filter(Boolean);
+            saveSettingsDebounced();
+        },
+    });
+};
+
 const showCssManager = async()=>{
     if (manager) {
         manager.focus();
@@ -971,7 +1211,6 @@ const showCssManager = async()=>{
             if (isResolved) return;
             console.log('[CSSS]', 'LOAD TIMEOUT');
             isResolved = true;
-            // manager.window.alert(`Manager window load event timed out after 2 seconds.\n\nLet's try to continue anyways.`);
             resolve();
         });
         manager.addEventListener('load', (evt)=>{
@@ -995,7 +1234,6 @@ const showCssManager = async()=>{
         const base = document.createElement('base');
         base.href = `${location.protocol}//${location.host}`;
         manager.document.head.append(base);
-        // manager.document.body.innerHTML = '<h1>Loading...</h1>';
         Array.from(document.querySelectorAll('link[rel="stylesheet"]:not([href*="/extensions/"]), style')).forEach(it=>manager.document.head.append(it.cloneNode(true)));
         managerStyle = manager.document.querySelector('#csss--css-snippets');
     };
@@ -1004,9 +1242,7 @@ const showCssManager = async()=>{
     const dom = manager.document.querySelector('#csss--root');
     // @ts-ignore
     manager.sortableStop = ()=>{
-        // @ts-ignore
-        settings.snippetList.sort((a,b)=>Array.from(list.children).findIndex(it=>it.snippet == a) - Array.from(list.children).findIndex(it=>it.snippet == b));
-        saveSettingsDebounced();
+        syncRootOrder();
     };
     // @ts-ignore
     manager.sortableDelay = getSortableDelay();
@@ -1022,14 +1258,7 @@ const showCssManager = async()=>{
             dom.append(script);
         }
     }
-    const sortableScript = manager.document.createElement('script');
-    sortableScript.innerHTML = `
-        $('#csss--list').sortable({
-            delay: window.sortableDelay,
-            stop: window.sortableStop,
-        });
-    `;
-    dom.append(sortableScript);
+
     const editorScript = manager.document.createElement('script');
     editorScript.type = 'module';
     editorScript.innerHTML = `
@@ -1044,11 +1273,6 @@ const showCssManager = async()=>{
         import { cursorPosition } from './scripts/extensions/third-party/SillyTavern-CssSnippets/lib/prism-code-editor/extensions/cursor.js';
         import { cssCompletion } from './scripts/extensions/third-party/SillyTavern-CssSnippets/lib/prism-code-editor/extensions/autocomplete/css/index.js';
 
-        /**
-         *
-         * @param {HTMLElement} content
-         * @param {Snippet} snippet
-         */
         window.createEditor = (content, snippet)=>{
             registerCompletions(['css'], {
                 sources: [cssCompletion()],
@@ -1057,7 +1281,6 @@ const showCssManager = async()=>{
                 content,
                 {
                     value: snippet.content,
-
                     insertSpaces: false,
                     language: 'css',
                     lineNumbers: true,
@@ -1094,13 +1317,64 @@ const showCssManager = async()=>{
             settings.snippetList.forEach(snippet=>snippetDomMapper.find(sdm=>sdm.snippet == snippet).li.querySelector('.csss--collapse').click());
         }
     });
+
+    // ── "New Folder" button in header ─────────────────────────────────────────
+    const newFolderBtn = dom.querySelector('#csss--add-folder');
+    newFolderBtn.addEventListener('click', ()=>createFolder());
+
     // @ts-ignore
     snippetTemplate = dom.querySelector('#csss--snippet').content.querySelector('.csss--snippet');
+    folderTemplate  = dom.querySelector('#csss--folder').content.querySelector('.csss--folder');
     list = dom.querySelector('#csss--list');
-    settings.snippetList.forEach(snippet=>{
-        const li = makeSnippetDom(snippet);
-        list.append(li);
-    });
+
+    // ── Build all snippet DOMs first (needed by makeFolderDom) ────────────────
+    for (const snippet of settings.snippetList) {
+        makeSnippetDom(snippet);
+    }
+
+    // ── Determine which snippets are in folders ───────────────────────────────
+    const snippetsInFolders = new Set(settings.folderList.flatMap(f=>f.snippetIds));
+
+    // ── Render root-level items: folders first (in order), then unassigned snippets ──
+    // We need to interleave them in a single pass based on what makes sense.
+    // Strategy: render in this order:
+    //   For each entry in settings.folderList → append folder li
+    //   For each snippet NOT in any folder (in snippetList order) → append snippet li
+    // Then rely on the user's existing sort order within folders.
+
+    // Actually we want to preserve the visual order: folders and root snippets
+    // were previously all in snippetList order. We can't perfectly recover interleaving
+    // on first run, so: folders go first, then root snippets. On subsequent loads
+    // the order is whatever was saved.
+
+    for (const folder of settings.folderList) {
+        const folderLi = makeFolderDom(folder);
+        list.append(folderLi);
+    }
+    for (const snippet of settings.snippetList) {
+        if (!snippetsInFolders.has(snippet.id)) {
+            list.append(snippetDomMapper.find(m=>m.snippet==snippet).li);
+        }
+    }
+
+    // ── Enable HTML5 drag on all snippet handles ──────────────────────────────
+    for (const { snippet, li } of snippetDomMapper) {
+        enableSnippetDrag(li, snippet);
+    }
+
+    // ── Root list sortable ────────────────────────────────────────────────────
+    // Initialised after a tick so jQuery is available in manager.window
+    setTimeout(()=>{
+        rebuildRootSortable();
+        // Init sub-sortables for each folder
+        for (const folder of settings.folderList) {
+            if (folder.li?._subList) {
+                initFolderSubSortable(folder.li._subList, folder);
+            }
+        }
+    }, 100);
+
+    // ── Import ────────────────────────────────────────────────────────────────
     /**@type {HTMLInputElement} */
     const imp = dom.querySelector('#csss--import-file');
     imp.addEventListener('input', async()=>{
@@ -1115,16 +1389,15 @@ const showCssManager = async()=>{
         try {
             snippets.push(...JSON.parse(text).map(it=>Snippet.from(settings, it)));
         } catch {
-            // if not JSON, treat as plain CSS
             snippets.push(new Snippet(settings, text));
         }
-
         let jumped = false;
         for (const snippet of snippets) {
             try {
                 settings.snippetList.push(snippet);
                 const li = makeSnippetDom(snippet);
                 list.append(li);
+                enableSnippetDrag(li, snippet);
                 if (!jumped) {
                     li.scrollIntoView();
                     jumped = true;
@@ -1132,11 +1405,14 @@ const showCssManager = async()=>{
             } catch { /* empty */ }
         }
         settings.save();
+        rebuildRootSortable();
     };
     dom.querySelector('#csss--import').addEventListener('click', ()=>imp.click());
     dom.addEventListener('paste', (evt)=>{
         importSnippets(evt.clipboardData.getData('text'));
     });
+
+    // ── Export ────────────────────────────────────────────────────────────────
     let exp = dom.querySelector('#csss--export');
     expAll = dom.querySelector('#csss--export-selectAll');
     let expMsg = dom.querySelector('#csss--export-message');
@@ -1165,21 +1441,17 @@ const showCssManager = async()=>{
         const isAll = selectedList.length == settings.snippetList.length;
         const isFiltered = selectedList.length == filtered.length && !selectedList.find(it=>!filtered.includes(it));
         if (isFiltered && !isAll) {
-            // select all, including hidden snippets
             for (const snippet of settings.snippetList) {
                 if (selectedList.includes(snippet)) continue;
                 selectedList.push(snippet);
                 snippetDomMapper.find(it=>it.snippet == snippet).li.classList.add('csss--selected');
             }
         } else if (isAll) {
-            // unselect all snippets
             while (selectedList.length > 0) {
                 const snippet = selectedList.pop();
                 snippetDomMapper.find(it=>it.snippet == snippet).li.classList.remove('csss--selected');
             }
         } else {
-            // select all visible / unfiltered snippets
-            // first deselect all filtered snippets
             const deselect = [];
             for (const snippet of selectedList) {
                 if (!filtered.includes(snippet)) deselect.push(snippet);
@@ -1188,7 +1460,6 @@ const showCssManager = async()=>{
                 selectedList.splice(selectedList.indexOf(snippet), 1);
                 snippetDomMapper.find(it=>it.snippet == snippet).li.classList.remove('csss--selected');
             }
-            // then select missing snippets
             for (const snippet of filtered) {
                 if (selectedList.includes(snippet)) continue;
                 selectedList.push(snippet);
@@ -1231,6 +1502,7 @@ const showCssManager = async()=>{
         stopExporting();
     });
 
+    // ── Search ────────────────────────────────────────────────────────────────
     /**@type {HTMLInputElement} */
     const search = dom.querySelector('#csss--searchQuery');
     search.title = [
@@ -1268,7 +1540,16 @@ const showCssManager = async()=>{
                 li.classList.add('csss--isHidden');
             }
         }
+        // show/hide folders based on whether they have visible snippets
+        for (const folder of settings.folderList) {
+            if (!folder.li) continue;
+            const subList = folder.li._subList;
+            const hasVisible = Array.from(subList.children).some(el=>!el.classList.contains('csss--isHidden') && !el.classList.contains('csss--isFiltered'));
+            folder.li.classList.toggle('csss--isHidden', !hasVisible && query.length > 0);
+        }
     });
+
+    // ── Filter ────────────────────────────────────────────────────────────────
     const applyFilter = ()=>{
         for (const snippet of settings.snippetList) {
             const li = snippetDomMapper.find(it=>it.snippet == snippet).li;
@@ -1327,11 +1608,13 @@ const showCssManager = async()=>{
         }
     });
 
+    // ── Settings ──────────────────────────────────────────────────────────────
     const settingsBtn = dom.querySelector('#csss--settings');
     settingsBtn.addEventListener('click', ()=>{
         settings.toggle(dom);
     });
 
+    // ── Add snippet ───────────────────────────────────────────────────────────
     dom.querySelector('.csss--add').addEventListener('click', ()=>createSnippet());
 
     if (isUnloaded) {
@@ -1343,7 +1626,6 @@ const showCssManager = async()=>{
     let onUnloadBound;
     const onUnload = (evt)=>{
         console.log('[CSSS]', 'UNLOAD', evt, evt.target.defaultView, evt.target.defaultView == manager);
-
         manager.removeEventListener('unload', onUnloadBound);
         manager = null;
     };
@@ -1351,67 +1633,6 @@ const showCssManager = async()=>{
     manager.addEventListener('unload', onUnloadBound);
     return '';
 };
-
-
-
-/**
- *
- * @param {HTMLTextAreaElement} message
- */
-const addTabSupport = (message)=>{
-    message.addEventListener('keydown', async(evt) => {
-        if (evt.key == 'Tab' && !evt.shiftKey && !evt.ctrlKey && !evt.altKey) {
-            evt.preventDefault();
-            const start = message.selectionStart;
-            const end = message.selectionEnd;
-            if (end - start > 0 && message.value.substring(start, end).includes('\n')) {
-                const lineStart = message.value.lastIndexOf('\n', start);
-                const count = message.value.substring(lineStart, end).split('\n').length - 1;
-                message.value = `${message.value.substring(0, lineStart)}${message.value.substring(lineStart, end).replace(/\n/g, '\n\t')}${message.value.substring(end)}`;
-                message.selectionStart = start + 1;
-                message.selectionEnd = end + count;
-                message.dispatchEvent(new Event('input', { bubbles:true }));
-            } else {
-                message.value = `${message.value.substring(0, start)}\t${message.value.substring(end)}`;
-                message.selectionStart = start + 1;
-                message.selectionEnd = end + 1;
-                message.dispatchEvent(new Event('input', { bubbles:true }));
-            }
-        } else if (evt.key == 'Tab' && evt.shiftKey && !evt.ctrlKey && !evt.altKey) {
-            evt.preventDefault();
-            const start = message.selectionStart;
-            const end = message.selectionEnd;
-            const lineStart = message.value.lastIndexOf('\n', start);
-            const count = message.value.substring(lineStart, end).split('\n\t').length - 1;
-            message.value = `${message.value.substring(0, lineStart)}${message.value.substring(lineStart, end).replace(/\n\t/g, '\n')}${message.value.substring(end)}`;
-            message.selectionStart = start - 1;
-            message.selectionEnd = end - count;
-            message.dispatchEvent(new Event('input', { bubbles:true }));
-        }
-    });
-};
-
-const addSyntaxHighlight = (message, messageSyntaxInner, language)=>{
-    const updateScroll = () => {
-        messageSyntaxInner.scrollTop = message.scrollTop;
-        messageSyntaxInner.scrollLeft = message.scrollLeft;
-    };
-    const updateScrollDebounced = debounce(()=>updateScroll(), 0);
-
-    message.addEventListener('input', () => {
-        messageSyntaxInner.innerHTML = hljs.highlight(`${message.value}${message.value.slice(-1) == '\n' ? ' ' : ''}`, { language, ignoreIllegals:true })?.value;
-        updateScrollDebounced();
-    });
-    message.addEventListener('scroll', ()=>{
-        updateScrollDebounced();
-    });
-    message.style.color = 'transparent';
-    message.style.background = 'transparent';
-    message.style.setProperty('text-shadow', 'none', 'important');
-    messageSyntaxInner.innerHTML = hljs.highlight(`${message.value}${message.value.slice(-1) == '\n' ? ' ' : ''}`, { language, ignoreIllegals:true })?.value;
-};
-
-
 
 
 

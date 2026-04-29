@@ -30,6 +30,7 @@
 			</div>
 		</div>
 		<ul id="csss--list">
+			<!-- Snippet template (unchanged) -->
 			<template id="csss--snippet">
 				<li class="csss--snippet">
 					<div class="csss--dragWrap">
@@ -75,9 +76,24 @@
 					</div>
 				</li>
 			</template>
+
+			<!-- Folder template -->
+			<template id="csss--folder">
+				<li class="csss--folder">
+					<div class="csss--folder-header">
+						<div class="drag-handle csss--folder-drag">☰</div>
+						<div class="csss--folder-collapse menu_button menu_button_icon fa-solid fa-angle-up" title="Collapse folder"></div>
+						<span class="csss--folder-icon fa-solid fa-folder"></span>
+						<input type="text" class="csss--folder-name text_pole" placeholder="folder name">
+						<div class="csss--folder-remove menu_button menu_button_icon fa-solid fa-trash redWarningBG" title="Delete folder (snippets are kept)"></div>
+					</div>
+					<ul class="csss--folder-snippets"></ul>
+				</li>
+			</template>
 		</ul>
 		<div class="csss--listActions">
 			<div class="csss--add menu_button menu_button_icon fa-solid fa-plus" id="csss--add" title="Add CSS snippet"></div>
+			<div class="csss--add-folder menu_button menu_button_icon fa-solid fa-folder-plus" id="csss--add-folder" title="Add folder"></div>
 		</div>
 	</div>
 </body>

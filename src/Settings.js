@@ -1,6 +1,7 @@
 import { saveSettingsDebounced } from '../../../../../script.js';
 import { extension_settings } from '../../../../extensions.js';
 import { delay } from '../../../../utils.js';
+import { Folder } from './Folder.js';
 import { Snippet } from './Snippet.js';
 import { BaseSetting } from './settings/BaseSetting.js';
 import { NumberSetting } from './settings/NumberSetting.js';
@@ -9,6 +10,7 @@ export class Settings {
     static from(props) {
         const inst = Object.assign(new Settings(), props);
         inst.snippetList = (props.snippetList ?? []).map(it=>Snippet.from(inst, it, props));
+        inst.folderList = (props.folderList ?? []).map(it=>Folder.from(it));
         return inst;
     }
 
@@ -18,6 +20,7 @@ export class Settings {
     /**@type {number}*/ watchInterval = 500;
 
     /**@type {Snippet[]}*/ snippetList = [];
+    /**@type {Folder[]}*/ folderList = [];
     /**@type {{[index:string]:string[]}}*/ themeSnippets = {};
     /**@type {{[index:string]:boolean}}*/ filters = {};
 
@@ -43,6 +46,7 @@ export class Settings {
         return {
             watchInterval: this.watchInterval,
             snippetList: this.snippetList,
+            folderList: this.folderList,
             themeSnippets: this.themeSnippets,
             filters: this.filters,
         };
